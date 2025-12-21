@@ -1,0 +1,106 @@
+{
+  "name": "reviewboard-vscode",
+  "displayName": "ReviewBoard for VSCode",
+  "description": "View ReviewBoard review requests in VSCode.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Review Board",
+      "properties": {
+        "reviewBoard.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "ReviewBoard server URL (e.g. https://reviewboard.example.com)"
+        },
+        "reviewBoard.username": {
+          "type": "string",
+          "default": "",
+          "description": "Your ReviewBoard username"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "reviewboard",
+          "title": "Review Board",
+          "icon": "$(notebook-render-output)"
+        }
+      ]
+    },
+    "views": {
+      "reviewboard": [
+        {
+          "id": "reviewboardExplorer",
+          "name": "Review Requests"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "reviewboard.refresh",
+        "title": "Refresh Review Requests",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "reviewboard.openReview",
+        "title": "Open Review Request by ID"
+      },
+      {
+        "command": "reviewboard.showDetail",
+        "title": "Show Review Details"
+      },
+      {
+        "command": "reviewboard.openDiff",
+        "title": "Open Diff"
+      },
+      {
+        "command": "reviewboard.applyToChangelist",
+        "title": "Apply to Changelist"
+      },
+      {
+        "command": "reviewboard.setPassword",
+        "title": "ReviewBoard: Set Password"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "reviewboard.refresh",
+          "when": "view == reviewboardExplorer",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/marked": "^4.3.2",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.0",
+    "@types/vscode": "^1.103.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.1"
+  },
+  "dependencies": {
+    "marked": "^4.3.0"
+  }
+}
