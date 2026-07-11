@@ -1,7 +1,7 @@
 {
   "name": "reviewboard-vscode",
-  "displayName": "ReviewBoard for VSCode",
-  "description": "View ReviewBoard review requests in VSCode.",
+  "displayName": "Review Board for VSCode",
+  "description": "View Review Board review requests in VSCode.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.103.0"
@@ -9,7 +9,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "configuration": {
@@ -18,12 +20,7 @@
         "reviewBoard.serverUrl": {
           "type": "string",
           "default": "",
-          "description": "ReviewBoard server URL (e.g. https://reviewboard.example.com)"
-        },
-        "reviewBoard.username": {
-          "type": "string",
-          "default": "",
-          "description": "Your ReviewBoard username"
+          "description": "Review Board server URL (e.g. https://reviewboard.example.com). Set by the sign-in flow; safe to commit to workspace settings."
         }
       }
     },
@@ -67,8 +64,12 @@
         "title": "Apply to Changelist"
       },
       {
-        "command": "reviewboard.setPassword",
-        "title": "ReviewBoard: Set Password"
+        "command": "reviewboard.signIn",
+        "title": "Review Board: Sign In"
+      },
+      {
+        "command": "reviewboard.signOut",
+        "title": "Review Board: Sign Out"
       }
     ],
     "menus": {
@@ -77,9 +78,26 @@
           "command": "reviewboard.refresh",
           "when": "view == reviewboardExplorer",
           "group": "navigation"
+        },
+        {
+          "command": "reviewboard.signOut",
+          "when": "view == reviewboardExplorer && reviewboard.authState == signedIn",
+          "group": "1_auth"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "reviewboardExplorer",
+        "when": "reviewboard.authState != signedIn && reviewboard.authState != signedOut",
+        "contents": "Connecting to Review Board…"
+      },
+      {
+        "view": "reviewboardExplorer",
+        "when": "reviewboard.authState == signedOut",
+        "contents": "Sign in to Review Board to see your review requests.\n\nAn API token is recommended — it can be revoked from Review Board at any time and never exposes your account password.\n\n[Sign In](command:reviewboard.signIn)"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

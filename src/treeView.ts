@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { AuthenticationError } from './auth';
 import { ReviewBoardApi, DiffFile } from './reviewBoardApi';
 
 const RB_TREE_SCHEME = 'rb-tree';
@@ -56,8 +57,14 @@ export class ReviewBoardTreeDataProvider implements vscode.TreeDataProvider<Revi
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
 	private revisionCache = new Map<number, number>();
+	private ready: Promise<unknown> = Promise.resolve();
 
 	constructor(private getApi: () => ReviewBoardApi | undefined) {}
+
+	// Blocks the tree until the startup credential check settles.
+	setReady(ready: Promise<unknown>): void {
+		this.ready = ready;
+	}
 
 	refresh(): void {
 		this.revisionCache.clear();
@@ -69,9 +76,13 @@ export class ReviewBoardTreeDataProvider implements vscode.TreeDataProvider<Revi
 	}
 
 	async getChildren(element?: ReviewBoardItem): Promise<ReviewBoardItem[]> {
+		await this.ready;
+
 		const api = this.getApi();
 		if (!api) {
-			return [new ReviewBoardItem('Configure credentials to get started', 'message', vscode.TreeItemCollapsibleState.None)];
+			// Empty, not a message item — an empty tree is what lets the
+			// sign-in welcome view render.
+			return [];
 		}
 
 		if (!element) {
@@ -121,6 +132,10 @@ export class ReviewBoardTreeDataProvider implements vscode.TreeDataProvider<Revi
 				)
 			);
 		} catch (error) {
+			if (error instanceof AuthenticationError) {
+				// AuthManager already cleared the credential and prompted.
+				return [];
+			}
 			vscode.window.showErrorMessage(`Error fetching review requests: ${error}`);
 			return [];
 		}
@@ -156,6 +171,9 @@ export class ReviewBoardTreeDataProvider implements vscode.TreeDataProvider<Revi
 				);
 			});
 		} catch (error) {
+			if (error instanceof AuthenticationError) {
+				return [];
+			}
 			vscode.window.showErrorMessage(`Error fetching files: ${error}`);
 			return [];
 		}

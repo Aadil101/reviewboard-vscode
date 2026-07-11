@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getConfig, getPassword, promptForPassword, runSetupWizard } from './config';
+import { AuthManager, AuthSession, setAuthState } from './auth';
 import { ReviewBoardApi } from './reviewBoardApi';
 import { ReviewBoardDocumentProvider } from './documentProvider';
 import { ReviewBoardTreeDataProvider, ReviewBoardItem, ReviewBoardFileDecorationProvider } from './treeView';
@@ -8,31 +8,24 @@ import { ReviewDetailPanel } from './reviewDetailPanel';
 
 let api: ReviewBoardApi | undefined;
 
-async function initializeApi(secrets: vscode.SecretStorage): Promise<ReviewBoardApi | undefined> {
-	const config = getConfig();
-	if (!config.serverUrl || !config.username) {
-		const result = await runSetupWizard(secrets);
-		if (!result) {
-			return undefined;
-		}
-		return new ReviewBoardApi(result.serverUrl, result.username, result.password);
-	}
-
-	let password = await getPassword(secrets);
-	if (!password) {
-		password = await promptForPassword(secrets);
-	}
-	if (!password) {
-		return undefined;
-	}
-
-	return new ReviewBoardApi(config.serverUrl, config.username, password);
-}
-
 export async function activate(context: vscode.ExtensionContext) {
-	api = await initializeApi(context.secrets);
+	setAuthState('loading');
+
+	const auth = new AuthManager(context.secrets);
 
 	const getApi = () => api;
+
+	/**
+	 * Requires an authenticated API client, offering sign-in if there is none.
+	 * Commands call this instead of failing with "not authenticated".
+	 */
+	const requireApi = async (): Promise<ReviewBoardApi | undefined> => {
+		if (api) {
+			return api;
+		}
+		await auth.signIn();
+		return api;
+	};
 
 	const rbDocProvider = new ReviewBoardDocumentProvider(getApi);
 	context.subscriptions.push(
@@ -47,6 +40,38 @@ export async function activate(context: vscode.ExtensionContext) {
 		treeDataProvider,
 	});
 	context.subscriptions.push(treeView);
+
+	// The API client is a pure function of the session: rebuilt on sign-in,
+	// dropped on sign-out or a rejected credential.
+	const onSession = (session: AuthSession | undefined) => {
+		api = session
+			? new ReviewBoardApi(session, () => void auth.handleUnauthorized())
+			: undefined;
+		treeDataProvider.refresh();
+	};
+	context.subscriptions.push(auth.onDidChangeSession(onSession));
+
+	// Validate stored credentials in the background. Activation never blocks on
+	// a credential prompt, but the tree does wait on this so it shows a spinner
+	// rather than an empty "signed out" state while the check is in flight.
+	treeDataProvider.setReady(auth.restore().catch(() => undefined));
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('reviewboard.signIn', async () => {
+			await auth.signIn();
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('reviewboard.signOut', async () => {
+			if (!auth.getSession()) {
+				vscode.window.showInformationMessage('Review Board: not signed in.');
+				return;
+			}
+			await auth.signOut();
+			vscode.window.showInformationMessage('Review Board: signed out and credentials cleared.');
+		})
+	);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('reviewboard.refresh', () => {
@@ -72,11 +97,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('reviewboard.showDetail', async (reviewId: number) => {
-			if (!api) {
-				vscode.window.showWarningMessage('ReviewBoard: Not authenticated.');
+			const client = await requireApi();
+			if (!client) {
 				return;
 			}
-			await ReviewDetailPanel.show(api, reviewId);
+			await ReviewDetailPanel.show(client, reviewId);
 		})
 	);
 
@@ -95,20 +120,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('reviewboard.applyToChangelist', async (reviewItem?: ReviewBoardItem) => {
-			if (!api) {
-				vscode.window.showWarningMessage('ReviewBoard: Not authenticated. Set your password first.');
+			const client = await requireApi();
+			if (!client) {
 				return;
 			}
-			await applyToChangelist(api, reviewItem);
-		})
-	);
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand('reviewboard.setPassword', async () => {
-			await promptForPassword(context.secrets);
-			api = await initializeApi(context.secrets);
-			treeDataProvider.refresh();
-			vscode.window.showInformationMessage('ReviewBoard password updated.');
+			await applyToChangelist(client, reviewItem);
 		})
 	);
 }

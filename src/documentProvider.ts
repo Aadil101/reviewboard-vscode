@@ -10,7 +10,7 @@ export class ReviewBoardDocumentProvider implements vscode.TextDocumentContentPr
 	async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
 		const api = this.getApi();
 		if (!api) {
-			return '// ReviewBoard credentials not configured. Use "ReviewBoard: Set Password" command.';
+			return '// Review Board credentials not configured. Use "Review Board: Set Password" command.';
 		}
 
 		const version = uri.authority === 'original' ? 'original-file' : 'patched-file';
@@ -24,7 +24,7 @@ export class ReviewBoardDocumentProvider implements vscode.TextDocumentContentPr
 		try {
 			return await api.getFileContent(reviewId, revisionId, fileId, version);
 		} catch (error) {
-			vscode.window.showErrorMessage(`Error fetching ReviewBoard file: ${error}`);
+			vscode.window.showErrorMessage(`Error fetching Review Board file: ${error}`);
 			return `// Error loading file: ${error}`;
 		}
 	}

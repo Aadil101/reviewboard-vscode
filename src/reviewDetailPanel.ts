@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import { marked } from 'marked';
+import { marked, Renderer } from 'marked';
 import { ReviewBoardApi, ReviewRequestDetail } from './reviewBoardApi';
 
 export class ReviewDetailPanel {
 	private static panels = new Map<number, ReviewDetailPanel>();
 	private panel: vscode.WebviewPanel;
 	private disposed = false;
+	private serverUrl = '';
 
 	static async show(api: ReviewBoardApi, reviewId: number) {
 		const existing = ReviewDetailPanel.panels.get(reviewId);
@@ -49,6 +50,7 @@ export class ReviewDetailPanel {
 
 	private renderHtml(detail: ReviewRequestDetail, reviews: Array<{ ship_it: boolean; body_top: string; user: string; timestamp: string }>): string {
 		const serverUrl = this.api.getServerUrl();
+		this.serverUrl = serverUrl;
 		const reviewUrl = `${serverUrl}/r/${detail.id}/`;
 		const shipIts = reviews.filter(r => r.ship_it);
 
@@ -349,7 +351,21 @@ ${shipIts.length > 0 ? `
 	}
 
 	private renderMarkdown(text: string): string {
-		return marked.parse(text, { async: false }) as string;
+		const renderer = new Renderer();
+		const resolve = (url: string | null): string => {
+			if (!url) { return ''; }
+			// Resolve server-relative URLs (e.g. "/static/...") against the server.
+			try {
+				return new URL(url, this.serverUrl + '/').toString();
+			} catch {
+				return url;
+			}
+		};
+		const baseImage = renderer.image.bind(renderer);
+		renderer.image = (href, title, alt) => baseImage(resolve(href), title, alt);
+		const baseLink = renderer.link.bind(renderer);
+		renderer.link = (href, title, text) => baseLink(resolve(href), title, text);
+		return marked.parse(text, { async: false, renderer }) as string;
 	}
 
 	private escapeHtml(text: string): string {

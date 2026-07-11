@@ -92,6 +92,6 @@ export async function applyToChangelist(api: ReviewBoardApi, reviewItem?: { type
 
 	vscode.window.showInformationMessage(validation.message);
 	vscode.window.showInformationMessage(
-		`Ready to apply ReviewBoard #${reviewId} to workspace at ${validation.workspaceRoot}`
+		`Ready to apply Review Board #${reviewId} to workspace at ${validation.workspaceRoot}`
 	);
 }

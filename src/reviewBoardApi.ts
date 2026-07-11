@@ -1,4 +1,4 @@
-import { getAuthHeader } from './config';
+import { AuthSession, AuthenticationError, authHeader } from './auth';
 
 export interface ReviewRequest {
 	id: number;
@@ -46,38 +46,44 @@ export interface DiffFile {
 
 export class ReviewBoardApi {
 	constructor(
-		private serverUrl: string,
-		private username: string,
-		private password: string,
+		private session: AuthSession,
+		/** Invoked once per rejected credential so the caller can re-authenticate. */
+		private onUnauthorized?: () => void,
 	) {}
 
-	private get authHeader(): string {
-		return getAuthHeader(this.username, this.password);
+	private get serverUrl(): string {
+		return this.session.serverUrl;
+	}
+
+	private get username(): string {
+		return this.session.username;
+	}
+
+	private async request(url: string, accept: string): Promise<Response> {
+		const response = await fetch(url, {
+			headers: {
+				'Authorization': authHeader(this.session.credential),
+				'Accept': accept,
+			},
+		});
+
+		if (response.status === 401 || response.status === 403) {
+			this.onUnauthorized?.();
+			throw new AuthenticationError('Review Board rejected your credentials.');
+		}
+		if (!response.ok) {
+			throw new Error(`Review Board API error: ${response.status} ${response.statusText}`);
+		}
+		return response;
 	}
 
 	private async fetchJson<T>(url: string): Promise<T> {
-		const response = await fetch(url, {
-			headers: {
-				'Authorization': this.authHeader,
-				'Accept': 'application/json',
-			},
-		});
-		if (!response.ok) {
-			throw new Error(`ReviewBoard API error: ${response.statusText}`);
-		}
+		const response = await this.request(url, 'application/json');
 		return response.json() as Promise<T>;
 	}
 
 	private async fetchText(url: string): Promise<string> {
-		const response = await fetch(url, {
-			headers: {
-				'Authorization': this.authHeader,
-				'Accept': 'text/plain',
-			},
-		});
-		if (!response.ok) {
-			throw new Error(`ReviewBoard API error: ${response.statusText}`);
-		}
+		const response = await this.request(url, 'text/plain');
 		return response.text();
 	}
 
@@ -102,7 +108,7 @@ export class ReviewBoardApi {
 
 	async getIncomingReviewRequests(): Promise<ReviewRequest[]> {
 		const data = await this.fetchJson<{ review_requests: any[] }>(
-			`${this.serverUrl}/api/review-requests/?to-users-directly=${encodeURIComponent(this.username)}&status=pending`
+			`${this.serverUrl}/api/review-requests/?to-users=${encodeURIComponent(this.username)}&status=pending`
 		);
 		return this.mapReviewRequests(data.review_requests);
 	}
@@ -177,5 +183,10 @@ export class ReviewBoardApi {
 
 	getServerUrl(): string {
 		return this.serverUrl;
+	}
+
+	/** The user Review Board authenticated us as, not the configured setting. */
+	getUsername(): string {
+		return this.username;
 	}
 }
